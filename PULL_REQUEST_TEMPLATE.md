@@ -26,8 +26,8 @@ https://rentico.atlassian.net/browse/
 
 ## 📋 Checklist
 
-- [] Code follows project conventions
-- [] Self-review of code was performed
-- [] Documentation updated if necessary
-- [] Tests pass successfully
+- [ ] Code follows project conventions
+- [ ] Self-review of code was performed
+- [ ] Documentation updated if necessary
+- [ ] Tests pass successfully
 
