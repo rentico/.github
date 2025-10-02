@@ -3,7 +3,7 @@ https://rentico.atlassian.net/browse/
 
 ## 📝 What changed?
 
---Brief description about what is changed
+-- Brief description about what is changed
 
 ## 🎯 Why
 
@@ -18,6 +18,7 @@ https://rentico.atlassian.net/browse/
 - [ ] 🎨 Style/formatting
 - [ ] ♻️ Refactoring
 - [ ] ⚡ Performance improvement
+- [ ] 📦 Dependency change
 - [ ] 🧪 Tests
 
 ## 🧪 How was it tested?
