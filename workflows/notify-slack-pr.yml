@@ -1,8 +1,10 @@
-name: Notify Slack on PR
+name: Reusable Slack PR Notification
 
 on:
-  pull_request:
-    types: [opened, reopened]
+  workflow_call:
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: true
 
 jobs:
   notify:
@@ -13,13 +15,13 @@ jobs:
         with:
           payload: |
             {
-              "text": "🔔 Nuevo Pull Request en ${{ github.repository }}",
+              "text": "🔔 New Pull Request en ${{ github.repository }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*New Pull Request created*\n\n*Repo:* `${{ github.repository }}`\n*Title:* ${{ github.event.pull_request.title }}\n*Author:* @${{ github.event.pull_request.user.login }}\n*Branch:* `${{ github.event.pull_request.head.ref }}` → `${{ github.event.pull_request.base.ref }}`"
+                    "text": "*New Pull Request*\n\n*Repo:* `${{ github.repository }}`\n*Title:* ${{ github.event.pull_request.title }}\n*Author:* @${{ github.event.pull_request.user.login }}\n*Branch:* `${{ github.event.pull_request.head.ref }}` → `${{ github.event.pull_request.base.ref }}`"
                   }
                 },
                 {
@@ -29,7 +31,7 @@ jobs:
                       "type": "button",
                       "text": {
                         "type": "plain_text",
-                        "text": "View Pull Request"
+                        "text": "Ver Pull Request"
                       },
                       "url": "${{ github.event.pull_request.html_url }}"
                     }
