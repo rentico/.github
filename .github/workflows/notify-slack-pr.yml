@@ -10,18 +10,43 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate random message
+        id: random_message
+        run: |
+          messages=(
+            "🚀 *Someone's launching code into orbit!*"
+            "🎉 *Fresh PR alert! Time to review!*"
+            "⚡ *New PR detected! Deploy the reviewers!*"
+            "🔥 *Hot code coming through!*"
+            "✨ *Code magic is happening!*"
+            "🎮 *ACHIEVEMENT UNLOCKED: New Pull Request!*"
+            "🧙 *A wild Pull Request appeared!*"
+            "🍕 *Fresh code delivery incoming!*"
+            "🎯 *New PR on the radar!*"
+            "💎 *Shiny new code ready for review!*"
+          )
+          
+          emojis=("🚀" "🎉" "⚡" "🔥" "✨" "🎮" "🧙" "🍕" "🎯" "💎")
+          
+          random_index=$((RANDOM % ${#messages[@]}))
+          random_emoji=${emojis[$random_index]}
+          random_message=${messages[$random_index]}
+          
+          echo "message=$random_message" >> $GITHUB_OUTPUT
+          echo "emoji=$random_emoji" >> $GITHUB_OUTPUT
+      
       - name: Send Slack notification
         uses: slackapi/slack-github-action@v1.26.0
         with:
           payload: |
             {
-              "text": "🔔 New Pull Request - ${{ github.repository }}",
+              "text": "${{ steps.random_message.outputs.emoji }} New Pull Request - ${{ github.repository }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*New Pull Request*\n\n*Repo:* `${{ github.repository }}`\n*Title:* ${{ github.event.pull_request.title }}\n*Author:* @${{ github.event.pull_request.user.login }}\n*Branch:* `${{ github.event.pull_request.head.ref }}` → `${{ github.event.pull_request.base.ref }}`"
+                    "text": "${{ steps.random_message.outputs.message }}\n\n📦 *Repo:* `${{ github.repository }}`\n📝 *Title:* ${{ github.event.pull_request.title }}\n👤 *Author:* @${{ github.event.pull_request.user.login }}\n🌿 *Branch:* `${{ github.event.pull_request.head.ref }}` → `${{ github.event.pull_request.base.ref }}`"
                   }
                 },
                 {
@@ -31,9 +56,11 @@ jobs:
                       "type": "button",
                       "text": {
                         "type": "plain_text",
-                        "text": "View Pull Request"
+                        "text": "👀 View PR",
+                        "emoji": true
                       },
-                      "url": "${{ github.event.pull_request.html_url }}"
+                      "url": "${{ github.event.pull_request.html_url }}",
+                      "style": "primary"
                     }
                   ]
                 }
