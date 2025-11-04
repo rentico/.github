@@ -1,0 +1,44 @@
+name: Reusable Slack PR Notification
+
+on:
+  workflow_call:
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "🔔 New Pull Request - ${{ github.repository }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*New Pull Request*\n\n*Repo:* `${{ github.repository }}`\n*Title:* ${{ github.event.pull_request.title }}\n*Author:* @${{ github.event.pull_request.user.login }}\n*Branch:* `${{ github.event.pull_request.head.ref }}` → `${{ github.event.pull_request.base.ref }}`"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Pull Request"
+                      },
+                      "url": "${{ github.event.pull_request.html_url }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.PR_SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
