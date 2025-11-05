@@ -102,7 +102,11 @@ jobs:
                               reviewerStates[review.user.login] = review.state;
                             });
 
-                            const approvalCount = Object.values(reviewerStates).filter(state => state === 'APPROVED').length;
+                            const approvers = Object.entries(reviewerStates)
+                              .filter(([_, state]) => state === 'APPROVED')
+                              .map(([login, _]) => login);
+
+                            const approvalCount = approvers.length;
                             const changesRequested = Object.values(reviewerStates).some(state => state === 'CHANGES_REQUESTED');
 
                             // Check if mergeable - this is what determines if the "Merge" button is enabled
@@ -147,6 +151,7 @@ jobs:
                               statusEmoji: statusEmoji,
                               statusText: statusText,
                               approvalCount: approvalCount,
+                              approvers: approvers,
                               readyToMerge: readyToMerge,
                               created: pr.created_at,
                               number: pr.number
@@ -213,7 +218,7 @@ jobs:
                           "type": "section",
                           "text": {
                             "type": "mrkdwn",
-                            "text": `*${title}*`
+                            "text": `*${title} (${prList.length})*`
                           }
                         });
 
@@ -223,13 +228,24 @@ jobs:
                             day: 'numeric'
                           });
 
-                          const approvalInfo = pr.approvalCount > 0 ? ` • ${pr.approvalCount}✅` : '';
+                          // Build approval info with approvers' names
+                          let approvalInfo = '';
+                          if (pr.approvalCount > 0) {
+                            const approversList = pr.approvers.map(a => `@${a}`).join(', ');
+                            approvalInfo = ` • ${pr.approvalCount}✅ by ${approversList}`;
+                          }
+
+                          // Truncate title to fit in one line (max 80 chars)
+                          const maxTitleLength = 80;
+                          const truncatedTitle = pr.title.length > maxTitleLength
+                            ? pr.title.substring(0, maxTitleLength - 3) + '...'
+                            : pr.title;
 
                           prBlocks.push({
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": `<${pr.url}|*${pr.title}*>\n\`${pr.repo}\` • @${pr.author} • ${createdDate}${approvalInfo}`
+                              "text": `<${pr.url}|*${truncatedTitle}*>\n\`${pr.repo}\` • @${pr.author} • ${createdDate}${approvalInfo}`
                             }
                           });
                         });
