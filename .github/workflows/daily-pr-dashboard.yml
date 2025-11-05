@@ -15,53 +15,69 @@ jobs:
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   script: |
-                      const org = context.repo.owner;
-
-                      // Get all repos in the organization
-                      const repos = await github.paginate(github.rest.repos.listForOrg, {
-                        org: org,
-                        type: 'all',
-                        per_page: 100
-                      });
-
+                      const owner = context.repo.owner;
                       let allPRs = [];
+                      let repos = [];
+
+                      try {
+                        // Try to get all repos in the organization
+                        console.log(`Attempting to fetch repos for organization: ${owner}`);
+                        repos = await github.paginate(github.rest.repos.listForOrg, {
+                          org: owner,
+                          type: 'all',
+                          per_page: 100
+                        });
+                        console.log(`Found ${repos.length} repositories in organization`);
+                      } catch (error) {
+                        console.log(`Not an organization or insufficient permissions: ${error.message}`);
+                        console.log(`Falling back to current repository only`);
+                        // Fallback to just the current repo
+                        repos = [{
+                          name: context.repo.repo,
+                          owner: { login: owner }
+                        }];
+                      }
 
                       for (const repo of repos) {
                         try {
+                          console.log(`Fetching PRs for ${repo.name}...`);
+
                           // Get open PRs for each repo
                           const prs = await github.rest.pulls.list({
-                            owner: org,
+                            owner: owner,
                             repo: repo.name,
                             state: 'open',
                             per_page: 100
                           });
-                          
+
+                          console.log(`Found ${prs.data.length} open PRs in ${repo.name}`);
+
                           for (const pr of prs.data) {
                             // Get reviews for this PR
                             const reviews = await github.rest.pulls.listReviews({
-                              owner: org,
+                              owner: owner,
                               repo: repo.name,
                               pull_number: pr.number
                             });
-                            
+
                             // Count unique approvals (latest review from each reviewer)
                             const reviewerStates = {};
                             reviews.data.forEach(review => {
                               reviewerStates[review.user.login] = review.state;
                             });
-                            
+
                             const approvalCount = Object.values(reviewerStates).filter(state => state === 'APPROVED').length;
                             const changesRequested = Object.values(reviewerStates).some(state => state === 'CHANGES_REQUESTED');
-                            
+
                             // Check if mergeable
                             const mergeable = pr.mergeable;
                             const mergeableState = pr.mergeable_state;
-                            
+
                             // Determine status
                             let statusEmoji = '⏳';
                             let statusText = 'Pending Review';
                             let readyToMerge = false;
-                            
+
                             if (changesRequested) {
                               statusEmoji = '🔴';
                               statusText = 'Changes Requested';
@@ -73,7 +89,7 @@ jobs:
                               statusEmoji = '✅';
                               statusText = `Approved (${approvalCount})`;
                             }
-                            
+
                             allPRs.push({
                               repo: repo.name,
                               title: pr.title,
@@ -91,6 +107,8 @@ jobs:
                           console.log(`Error fetching PRs for ${repo.name}:`, error.message);
                         }
                       }
+
+                      console.log(`Total PRs collected: ${allPRs.length}`);
 
                       // Sort: Ready to merge first, then by date
                       allPRs.sort((a, b) => {
