@@ -17,27 +17,8 @@ jobs:
         id: random_message
         if: github.event_name == 'pull_request' && github.event.action == 'opened'
         run: |
-          messages=(
-            "🚀 *Someone's launching code into orbit!*"
-            "🎉 *Fresh PR alert! Time to review!*"
-            "⚡ *New PR detected! Deploy the reviewers!*"
-            "🔥 *Hot code coming through!*"
-            "✨ *Code magic is happening!*"
-            "🎮 *ACHIEVEMENT UNLOCKED: New Pull Request!*"
-            "🧙 *A wild Pull Request appeared!*"
-            "🍕 *Fresh code delivery incoming!*"
-            "🎯 *New PR on the radar!*"
-            "💎 *Shiny new code ready for review!*"
-          )
-          
-          emojis=("🚀" "🎉" "⚡" "🔥" "✨" "🎮" "🧙" "🍕" "🎯" "💎")
-          
-          random_index=$((RANDOM % ${#messages[@]}))
-          random_emoji=${emojis[$random_index]}
-          random_message=${messages[$random_index]}
-          
-          echo "message=$random_message" >> $GITHUB_OUTPUT
-          echo "emoji=$random_emoji" >> $GITHUB_OUTPUT
+          echo "message=📬 *New Pull Request Created*" >> $GITHUB_OUTPUT
+          echo "emoji=📬" >> $GITHUB_OUTPUT
       
       # ============================================
       # EVENTO 1: PR Created
