@@ -6,7 +6,7 @@ on:
     workflow_dispatch: # Allows manual execution
 
 env:
-    REPOS_TO_MONITOR: "rentico/renti-backend, rentico/renti-web, rentico/renti-forms, rentico/renti-schemas, rentico/stats-service, rentico/calendar-integration-service, rentico/document-exporter"
+    REPOS_TO_MONITOR: ""
 
 jobs:
     pr-dashboard:
