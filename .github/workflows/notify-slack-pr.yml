@@ -1,4 +1,4 @@
-name: Reusable Slack PR Notification
+name: Reusable Slack PR Events Notification
 
 on:
   workflow_call:
@@ -10,8 +10,12 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      # ============================================
+      # Step 1: Generate random messages (only for creating PR)
+      # ============================================
       - name: Generate random message
         id: random_message
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
         run: |
           messages=(
             "🚀 *Someone's launching code into orbit!*"
@@ -35,32 +39,184 @@ jobs:
           echo "message=$random_message" >> $GITHUB_OUTPUT
           echo "emoji=$random_emoji" >> $GITHUB_OUTPUT
       
-      - name: Send Slack notification
+      # ============================================
+      # EVENTO 1: PR Created
+      # ============================================
+      - name: Send notification - PR Created
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
         uses: slackapi/slack-github-action@v1.26.0
         with:
           payload: |
             {
               "text": "${{ steps.random_message.outputs.emoji }} New Pull Request - ${{ github.repository }}",
-              "blocks": [
+              "attachments": [
                 {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "${{ steps.random_message.outputs.message }}\n\n📦 *Repo:* `${{ github.repository }}`\n📝 *Title:* ${{ github.event.pull_request.title }}\n👤 *Author:* @${{ github.event.pull_request.user.login }}\n🌿 *Branch:* `${{ github.event.pull_request.head.ref }}` → `${{ github.event.pull_request.base.ref }}`"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
+                  "color": "#2eb886",
+                  "blocks": [
                     {
-                      "type": "button",
+                      "type": "section",
                       "text": {
-                        "type": "plain_text",
-                        "text": "👀 View PR",
-                        "emoji": true
-                      },
-                      "url": "${{ github.event.pull_request.html_url }}",
-                      "style": "primary"
+                        "type": "mrkdwn",
+                        "text": "${{ steps.random_message.outputs.message }}\n\n📦 *Repo:* `${{ github.repository }}`\n📝 *Title:* ${{ github.event.pull_request.title }}\n👤 *Author:* <https://github.com/${{ github.event.pull_request.user.login }}|@${{ github.event.pull_request.user.login }}>\n🌿 *Branch:* `${{ github.event.pull_request.head.ref }}` → `${{ github.event.pull_request.base.ref }}`\n\n<${{ github.event.pull_request.html_url }}|👀 View Pull Request>"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      
+      # ============================================
+      # EVENT 2: PR Approved
+      # ============================================
+      - name: Check if PR is ready to merge (after approval)
+        if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+        id: check_mergeable
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number
+            });
+            
+            // Check reviews
+            const reviews = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number
+            });
+            
+            // Get unique reviewers and their latest review state
+            const reviewerStates = {};
+            reviews.data.forEach(review => {
+              reviewerStates[review.user.login] = review.state;
+            });
+            
+            const approvalCount = Object.values(reviewerStates).filter(state => state === 'APPROVED').length;
+            const changesRequested = Object.values(reviewerStates).some(state => state === 'CHANGES_REQUESTED');
+            
+            // Check if mergeable
+            const mergeable = pr.data.mergeable;
+            const mergeableState = pr.data.mergeable_state;
+            
+            // Determine if ready to merge
+            const readyToMerge = mergeable && !changesRequested && approvalCount > 0 && mergeableState === 'clean';
+            
+            return {
+              readyToMerge: readyToMerge,
+              approvalCount: approvalCount,
+              mergeable: mergeable,
+              mergeableState: mergeableState
+            };
+      
+      - name: Send notification - PR Approved
+        if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "✅ PR Approved - ${{ github.repository }}",
+              "attachments": [
+                {
+                  "color": "#36a64f",
+                  "blocks": [
+                    {
+                      "type": "section",
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "✅ *Pull Request Approved!*\n\n📦 *Repo:* `${{ github.repository }}`\n📝 *PR:* ${{ github.event.pull_request.title }}\n👨‍⚖️ *Approved by:* <https://github.com/${{ github.event.review.user.login }}|@${{ github.event.review.user.login }}>\n👤 *PR Author:* <https://github.com/${{ github.event.pull_request.user.login }}|@${{ github.event.pull_request.user.login }}>\n💬 *Comment:* ${{ github.event.review.body || '_No comment provided_' }}\n${{ fromJSON(steps.check_mergeable.outputs.result).readyToMerge && '🎯 *Status:* ✅ Ready to merge!' || '⏳ *Status:* Waiting for checks or more approvals' }}\n\n<${{ github.event.pull_request.html_url }}|👀 View Pull Request>"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      
+      # ============================================
+      # EVENT 3: Changes requested
+      # ============================================
+      - name: Send notification - Changes Requested
+        if: github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "🔴 Changes Requested - ${{ github.repository }}",
+              "attachments": [
+                {
+                  "color": "#ff0000",
+                  "blocks": [
+                    {
+                      "type": "section",
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "🔴 *Changes Requested on PR*\n\n📦 *Repo:* `${{ github.repository }}`\n📝 *PR:* ${{ github.event.pull_request.title }}\n👨‍⚖️ *Requested by:* <https://github.com/${{ github.event.review.user.login }}|@${{ github.event.review.user.login }}>\n👤 *PR Author:* <https://github.com/${{ github.event.pull_request.user.login }}|@${{ github.event.pull_request.user.login }}>\n💬 *Feedback:* ${{ github.event.review.body || '_See review comments in the PR_' }}\n\n<${{ github.event.pull_request.html_url }}|👀 View Pull Request>"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      
+      # ============================================
+      # EVENT 4: PR Comment
+      # ============================================
+      - name: Send notification - PR Comment
+        if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "💬 New Comment on PR - ${{ github.repository }}",
+              "attachments": [
+                {
+                  "color": "#0366d6",
+                  "blocks": [
+                    {
+                      "type": "section",
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "💬 *New Comment on Pull Request*\n\n📦 *Repo:* `${{ github.repository }}`\n📝 *PR:* ${{ github.event.issue.title }}\n👤 *Commented by:* <https://github.com/${{ github.event.comment.user.login }}|@${{ github.event.comment.user.login }}>\n👤 *PR Author:* <https://github.com/${{ github.event.issue.user.login }}|@${{ github.event.issue.user.login }}>\n💭 *Comment:* ${{ github.event.comment.body }}\n\n<${{ github.event.comment.html_url }}|👀 View Comment>"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      
+      # ============================================
+      # EVENT 5: Review Comment
+      # ============================================
+      - name: Send notification - Review Comment
+        if: github.event_name == 'pull_request_review_comment'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "💬 New Review Comment - ${{ github.repository }}",
+              "attachments": [
+                {
+                  "color": "#ffa500",
+                  "blocks": [
+                    {
+                      "type": "section",
+                      "text": {
+                        "type": "mrkdwn",
+                        "text": "💬 *New Review Comment on Code*\n\n📦 *Repo:* `${{ github.repository }}`\n📝 *PR:* ${{ github.event.pull_request.title }}\n👤 *Commented by:* <https://github.com/${{ github.event.comment.user.login }}|@${{ github.event.comment.user.login }}>\n👤 *PR Author:* <https://github.com/${{ github.event.pull_request.user.login }}|@${{ github.event.pull_request.user.login }}>\n📄 *File:* `${{ github.event.comment.path }}`\n💭 *Comment:* ${{ github.event.comment.body }}\n\n<${{ github.event.comment.html_url }}|👀 View Comment>"
+                      }
                     }
                   ]
                 }
