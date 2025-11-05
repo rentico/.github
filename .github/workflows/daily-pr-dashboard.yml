@@ -82,6 +82,13 @@ jobs:
                               continue;
                             }
 
+                            // Get full PR details to ensure mergeable state is populated
+                            const fullPR = await github.rest.pulls.get({
+                              owner: repoOwner,
+                              repo: repo.name,
+                              pull_number: pr.number
+                            });
+
                             // Get reviews for this PR
                             const reviews = await github.rest.pulls.listReviews({
                               owner: repoOwner,
@@ -99,8 +106,8 @@ jobs:
                             const changesRequested = Object.values(reviewerStates).some(state => state === 'CHANGES_REQUESTED');
 
                             // Check if mergeable - this is what determines if the "Merge" button is enabled
-                            const mergeable = pr.mergeable;
-                            const mergeableState = pr.mergeable_state;
+                            const mergeable = fullPR.data.mergeable;
+                            const mergeableState = fullPR.data.mergeable_state;
 
                             // Determine status based on GitHub's merge button state
                             let statusEmoji = '⏳';
