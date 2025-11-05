@@ -6,8 +6,6 @@ on:
     workflow_dispatch: # Allows manual execution
 
 env:
-    # Lista de repositorios a monitorear (formato: owner/repo)
-    # Deja vacío para usar todos los repos de la organización
     REPOS_TO_MONITOR: "rentico/renti-backend, rentico/renti-web, rentico/renti-forms, rentico/renti-schemas, rentico/stats-service, rentico/calendar-integration-service, rentico/document-exporter"
 
 jobs:
@@ -78,6 +76,12 @@ jobs:
                           console.log(`Found ${prs.data.length} open PRs in ${repo.name}`);
 
                           for (const pr of prs.data) {
+                            // Skip draft PRs
+                            if (pr.draft) {
+                              console.log(`Skipping draft PR #${pr.number} in ${repo.name}`);
+                              continue;
+                            }
+
                             // Get reviews for this PR
                             const reviews = await github.rest.pulls.listReviews({
                               owner: repoOwner,
@@ -173,35 +177,58 @@ jobs:
                         };
                       }
 
-                      // Count stats
-                      const readyToMerge = prs.filter(pr => pr.readyToMerge).length;
-                      const needsReview = prs.filter(pr => pr.approvalCount === 0).length;
-                      const changesRequested = prs.filter(pr => pr.statusText === 'Changes Requested').length;
+                      // Group PRs by status
+                      const readyToMergePRs = prs.filter(pr => pr.readyToMerge);
+                      const changesRequestedPRs = prs.filter(pr => pr.statusText === 'Changes Requested');
+                      const approvedPRs = prs.filter(pr => pr.approvalCount > 0 && !pr.readyToMerge && pr.statusText !== 'Changes Requested');
+                      const needsReviewPRs = prs.filter(pr => pr.approvalCount === 0 && pr.statusText !== 'Changes Requested');
 
                       // Build PR list blocks
                       let prBlocks = [];
 
-                      prs.forEach(pr => {
-                        const createdDate = new Date(pr.created).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric' 
-                        });
-                        
+                      const addPRSection = (title, prList) => {
+                        if (prList.length === 0) return;
+
                         prBlocks.push({
                           "type": "section",
                           "text": {
                             "type": "mrkdwn",
-                            "text": `${pr.statusEmoji} *<${pr.url}|#${pr.number} - ${pr.title}>*\n📦 \`${pr.repo}\` • 👤 @${pr.author} • 📅 ${createdDate}\n${pr.approvalCount > 0 ? `✅ ${pr.approvalCount} approval(s)` : '⏳ Awaiting review'} ${pr.readyToMerge ? '• 🎯 *Ready to merge!*' : ''}`
+                            "text": `*${title}*`
                           }
                         });
-                        
+
+                        prList.forEach(pr => {
+                          const createdDate = new Date(pr.created).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
+                          });
+
+                          const approvalInfo = pr.approvalCount > 0 ? ` • ${pr.approvalCount}✅` : '';
+
+                          prBlocks.push({
+                            "type": "section",
+                            "text": {
+                              "type": "mrkdwn",
+                              "text": `${pr.statusEmoji} <${pr.url}|*${pr.title}*>\n\`${pr.repo}\` • @${pr.author} • ${createdDate}${approvalInfo}`
+                            }
+                          });
+                        });
+
                         prBlocks.push({
                           "type": "divider"
                         });
-                      });
+                      };
+
+                      // Add sections in priority order
+                      addPRSection('🎯 Ready to Merge', readyToMergePRs);
+                      addPRSection('🔴 Changes Requested', changesRequestedPRs);
+                      addPRSection('✅ Approved', approvedPRs);
+                      addPRSection('⏳ Needs Review', needsReviewPRs);
 
                       // Remove last divider
-                      prBlocks.pop();
+                      if (prBlocks.length > 0) {
+                        prBlocks.pop();
+                      }
 
                       return {
                         text: `📊 Daily PR Dashboard - ${prs.length} open PR(s)`,
@@ -217,7 +244,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": `*Summary of Open Pull Requests*\n\n📋 Total Open: *${prs.length}*\n✅ Ready to Merge: *${readyToMerge}*\n⏳ Needs Review: *${needsReview}*\n🔴 Changes Requested: *${changesRequested}*`
+                              "text": `📋 ${prs.length} open • 🎯 ${readyToMergePRs.length} ready • ⏳ ${needsReviewPRs.length} pending • 🔴 ${changesRequestedPRs.length} blocked`
                             }
                           },
                           {
