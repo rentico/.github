@@ -98,26 +98,39 @@ jobs:
                             const approvalCount = Object.values(reviewerStates).filter(state => state === 'APPROVED').length;
                             const changesRequested = Object.values(reviewerStates).some(state => state === 'CHANGES_REQUESTED');
 
-                            // Check if mergeable
+                            // Check if mergeable - this is what determines if the "Merge" button is enabled
                             const mergeable = pr.mergeable;
                             const mergeableState = pr.mergeable_state;
 
-                            // Determine status
+                            // Determine status based on GitHub's merge button state
                             let statusEmoji = '⏳';
                             let statusText = 'Pending Review';
                             let readyToMerge = false;
 
-                            if (changesRequested) {
-                              statusEmoji = '🔴';
-                              statusText = 'Changes Requested';
-                            } else if (approvalCount > 0 && mergeable && mergeableState === 'clean') {
-                              statusEmoji = '✅';
+                            // Ready to merge = GitHub's "Merge" button is enabled
+                            // This respects branch protection rules, required approvals, checks, etc.
+                            if (mergeableState === 'clean') {
+                              statusEmoji = '🎯';
                               statusText = 'Ready to Merge';
                               readyToMerge = true;
+                            } else if (changesRequested) {
+                              statusEmoji = '🔴';
+                              statusText = 'Changes Requested';
+                            } else if (mergeableState === 'blocked') {
+                              statusEmoji = '⏳';
+                              statusText = approvalCount > 0 ? `Approved (${approvalCount}) - Blocked` : 'Blocked';
+                            } else if (mergeableState === 'behind') {
+                              statusEmoji = '⏳';
+                              statusText = approvalCount > 0 ? `Approved (${approvalCount}) - Behind` : 'Behind';
+                            } else if (mergeableState === 'dirty') {
+                              statusEmoji = '⚠️';
+                              statusText = 'Conflicts';
                             } else if (approvalCount > 0) {
                               statusEmoji = '✅';
                               statusText = `Approved (${approvalCount})`;
                             }
+
+                            console.log(`PR #${pr.number} (${repo.name}): mergeable=${mergeable}, mergeableState=${mergeableState}, approvals=${approvalCount}, readyToMerge=${readyToMerge}`);
 
                             allPRs.push({
                               repo: repo.name,
@@ -209,7 +222,7 @@ jobs:
                             "type": "section",
                             "text": {
                               "type": "mrkdwn",
-                              "text": `${pr.statusEmoji} <${pr.url}|*${pr.title}*>\n\`${pr.repo}\` • @${pr.author} • ${createdDate}${approvalInfo}`
+                              "text": `<${pr.url}|*${pr.title}*>\n\`${pr.repo}\` • @${pr.author} • ${createdDate}${approvalInfo}`
                             }
                           });
                         });
